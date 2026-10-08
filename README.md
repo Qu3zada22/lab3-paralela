@@ -38,18 +38,25 @@ Laboratorio 03 previo al Proyecto 2 — CC3069 Computación Paralela y Distribui
 
 ### 👤 Persona 3 — Ejercicio 4 (Versión paralela con Open MPI)
 
-- [ ] **4a)** Versión paralela a partir del secuencial corregido:
+- [x] **4a)** Versión paralela a partir del secuencial corregido (`busqueda_clave_aes_mpi.c`, informe sección 4):
   - Repartir la búsqueda entre procesos sin omitir ni repetir candidatas.
   - Coordinar la finalización cuando se encuentre la clave o se agote el rango.
   - Verificar que ambas versiones recuperan la misma clave y mensaje.
-- [ ] **4b)** Medir tiempos con `MPI_Wtime()` usando 2, 3 y 4 procesos y calcular el Speedup (con capturas).
+- [x] **4b)** Medir tiempos con `MPI_Wtime()` usando 2, 3 y 4 procesos y calcular el Speedup.
+  - [ ] Capturas de compilación/ejecución MPI y de las mediciones (tomarlas en Linux/WSL).
+  ```bash
+  mpicc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_mpi.c -o busqueda_clave_aes_mpi -lcrypto
+  mpirun -np 4 ./busqueda_clave_aes_mpi [bits=20] [secreta=1000000] [mensaje]
+  ```
 
 | Cantidad de procesos (n) | Tiempo (s) | Speedup |
 |---|---|---|
-| 1 (secuencial) | | 1.00 |
-| 2 | | |
-| 3 | | |
-| 4 | | |
+| 1 (secuencial) | 2.267 | 1.00 |
+| 2 | 0.967 | 2.34 |
+| 3 | 0.775 | 2.93 |
+| 4 | 0.432 | 5.25 |
+
+*Medido con `24 16000000` (2^24 candidatas), mediana de 3 corridas.*
 
 ## Orden de trabajo
 

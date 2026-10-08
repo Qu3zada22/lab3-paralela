@@ -175,6 +175,79 @@ Tiempo: 0.050182 segundos
 
 ---
 
+## 4. Versión paralela con Open MPI
+
+### a) Diseño de la versión paralela
+
+La versión paralela está en `busqueda_clave_aes_mpi.c` y parte directamente del programa corregido (`busqueda_clave_aes_secuencial_mejorado.c`). Conserva todas sus mejoras: AES-128-CBC con IV aleatorio, los mismos argumentos (`bits`, `secreta`, `mensaje`), el contexto EVP configurado una sola vez, la verificación con el primer bloque y el mismo reporte. Lo único que cambia es cómo se reparte la búsqueda y cómo se mide el tiempo.
+
+**Preparación.** Solo el proceso 0 genera el IV y cifra el mensaje con la clave secreta. Después manda a todos los procesos el IV, el largo del texto cifrado y el texto cifrado con `MPI_Bcast`. Así los demás procesos nunca conocen la clave secreta, igual que en un ataque real, y todos buscan sobre el mismo texto cifrado.
+
+**Distribución sin omitir ni repetir candidatas.** Se usa una distribución cíclica: el proceso `r` de `n` prueba las candidatas `r, r + n, r + 2n, ...`. Cada número `k` del rango `0 .. 2^bits − 1` le toca a un único proceso (al de rango `k mod n`), entonces ninguna candidata se omite y ninguna se prueba dos veces. Se eligió cíclica y no por bloques porque con bloques el proceso al que le toca la clave podría ser el último, y los demás terminarían su parte sin encontrar nada; con la distribución cíclica todos avanzan juntos por el rango y la clave se encuentra en la iteración `k / n`, sin importar dónde esté.
+
+**Coordinación de la finalización.** Cada 4096 iteraciones todos los procesos hacen un `MPI_Allreduce` con `MPI_MIN` de su hallazgo local (que vale `UINT64_MAX` si todavía no encontraron nada). Si el resultado es distinto de `UINT64_MAX`, alguien encontró la clave y todos salen del ciclo al mismo tiempo. Si nadie la encuentra, todos hacen el mismo número de iteraciones, `ceil(2^bits / n)`, así que terminan juntos al agotar el rango. Al final hay un último `MPI_Allreduce` para cubrir el caso en que el rango termina entre dos chequeos. El chequeo no se hace en cada iteración porque comunicarse un millón de veces costaría más que la propia búsqueda; con 4096 iteraciones el costo de comunicación es pequeño y, en el peor caso, los procesos prueban unas pocas miles de candidatas de más después de encontrar la clave (por eso "Candidatas probadas" sale un poco mayor que en la versión secuencial). Usar `MPI_MIN` asegura que se reporte la menor clave que coincide, que es la misma que encuentra la versión secuencial.
+
+**Medición del tiempo.** Antes de empezar se hace un `MPI_Barrier` para que todos arranquen juntos, y el tiempo se toma con `MPI_Wtime()`. Igual que en la versión secuencial, solo se mide la búsqueda. Como cada proceso mide su propio tiempo, se reporta el máximo con `MPI_Reduce(MPI_MAX)`, porque la ejecución no termina hasta que termina el proceso más lento. El total de candidatas probadas se suma con `MPI_Reduce(MPI_SUM)`.
+
+### Compilación y ejecución
+
+```bash
+sudo apt install openmpi-bin libopenmpi-dev
+mpicc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_mpi.c -o busqueda_clave_aes_mpi -lcrypto
+
+mpirun -np 4 ./busqueda_clave_aes_mpi                     # valores por defecto: bits=20, secreta=1000000
+mpirun -np 3 ./busqueda_clave_aes_mpi 16 777 "Hola"
+mpirun -np 4 ./busqueda_clave_aes_mpi 18 200000 "Este mensaje tiene varios bloques de AES-128 en CBC."
+mpirun -np 3 ./busqueda_clave_aes_mpi 12 5000             # clave fuera del rango: se agota sin encontrarla
+```
+
+Ejemplo de salida con 4 procesos y los valores por defecto:
+
+```
+Clave encontrada: 1000000
+Clave (hex): 000000000000000000000000000f4240
+Mensaje: Puedes lograrlo!
+Coincide con el original: si
+Modo: AES-128-CBC, IV: 8fd12d05ac3982b69b792be36256b9bf
+Candidatas probadas: 1011857 de 1048576
+Rango explorado: 2^20 de 2^128 claves (2^-108 del espacio)
+Velocidad: 17523680 claves/s
+Ejecucion: MPI con 4 procesos (distribucion ciclica)
+Tiempo: 0.057742 segundos
+```
+
+**Verificación.** Se corrieron los mismos cuatro casos de la sección 3 con la versión secuencial y con la paralela (con 1, 2, 3 y 4 procesos). En todos los casos las dos versiones encontraron la misma clave (1 000 000, 777 y 200 000) y el mismo mensaje, con "Coincide con el original: si", y en el caso de la clave fuera del rango las dos recorrieron las 4096 candidatas y reportaron que no la encontraron. El IV cambia entre ejecuciones porque es aleatorio, pero eso no afecta la clave encontrada.
+
+> *Captura 4.1: compilación de la versión MPI. Capturas 4.2 a 4.5: ejecución de los cuatro casos y comparación con la versión secuencial.*
+
+### b) Tiempos y Speedup
+
+Con los valores por defecto (2²⁰ candidatas) la búsqueda dura apenas unos 0.05 a 0.1 segundos, y a esa escala el tiempo de arranque y de comunicación pesa demasiado y las mediciones varían mucho entre una corrida y otra. Por eso para medir el Speedup se usó un problema más grande, 2²⁴ candidatas con la clave secreta en 16 000 000 (cerca del final del rango), que en secuencial tarda un poco más de 2 segundos:
+
+```bash
+./busqueda_clave_aes_secuencial_mejorado 24 16000000
+mpirun -np 2 ./busqueda_clave_aes_mpi 24 16000000
+mpirun -np 3 ./busqueda_clave_aes_mpi 24 16000000
+mpirun -np 4 ./busqueda_clave_aes_mpi 24 16000000
+```
+
+Cada configuración se ejecutó 3 veces y se tomó la mediana. El Speedup se calcula como `S(n) = T_secuencial / T_paralelo(n)`.
+
+| Cantidad de procesos (n) | Tiempo (s) | Speedup calculado |
+|---|---|---|
+| 1 (secuencial) | 2.267 | 1.00 |
+| 2 | 0.967 | 2.34 |
+| 3 | 0.775 | 2.93 |
+| 4 | 0.432 | 5.25 |
+
+*Mediciones en WSL2 (Ubuntu) con 16 hilos lógicos. Como referencia, la versión MPI con 1 proceso tardó 2.123 s, casi lo mismo que la secuencial, lo que muestra que el costo de MPI es pequeño.*
+
+El Speedup crece con la cantidad de procesos, como se esperaba, porque la búsqueda es un problema "vergonzosamente paralelo": cada candidata se prueba de forma independiente y la única comunicación es el `MPI_Allreduce` cada 4096 iteraciones. Los valores salen incluso por encima del ideal (`S(n) = n`). Esto no significa que el programa haga menos trabajo, ya que el total de candidatas probadas es prácticamente el mismo; lo más probable es que se deba al hardware: en un procesador con núcleos de distinto tipo (de rendimiento y de eficiencia) y con frecuencia variable (turbo), el sistema operativo puede ubicar al proceso secuencial en un núcleo más lento o bajarle la frecuencia, mientras que con varios procesos alguno cae en los núcleos más rápidos. También influye que WSL2 corre dentro de una máquina virtual. Por eso los números exactos cambian según la máquina, pero la tendencia es clara: repartir la búsqueda entre procesos reduce el tiempo casi en proporción al número de procesos.
+
+> *Captura 4.6: ejecución secuencial y con 2, 3 y 4 procesos usando `24 16000000`.*
+
+---
+
 ## Referencias
 
 National Institute of Standards and Technology (2001, actualizado 2023). _FIPS 197: Advanced Encryption Standard (AES)_. https://doi.org/10.6028/NIST.FIPS.197-upd1
