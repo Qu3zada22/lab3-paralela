@@ -8,11 +8,11 @@ Laboratorio 03 previo al Proyecto 2 — CC3069 Computación Paralela y Distribui
 
 ### 👤 Persona 1 — Ejercicio 1 (Investigación AES)
 
-- [ ] **1a)** Al menos 3 campos de aplicación / ejemplos actuales de uso de AES.
-- [ ] **1b)** Pasos para cifrar y descifrar con AES-128:
+- [x] **1a)** Al menos 3 campos de aplicación / ejemplos actuales de uso de AES.
+- [x] **1b)** Pasos para cifrar y descifrar con AES-128:
   - Tamaño de la clave y procesamiento en bloques.
   - Principales transformaciones (SubBytes, ShiftRows, MixColumns, AddRoundKey).
-- [ ] **1c)** Diagrama de flujo de cifrado y descifrado, mostrando cómo interviene la clave.
+- [x] **1c)** Diagrama de flujo de cifrado y descifrado, mostrando cómo interviene la clave.
 - [ ] **Extra:** armar el PDF final con las respuestas y capturas de todos.
 
 ### 👤 Persona 2 — Ejercicios 2 y 3 (Programa secuencial)
