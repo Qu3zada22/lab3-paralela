@@ -43,7 +43,8 @@ Laboratorio 03 previo al Proyecto 2 — CC3069 Computación Paralela y Distribui
   - Coordinar la finalización cuando se encuentre la clave o se agote el rango.
   - Verificar que ambas versiones recuperan la misma clave y mensaje.
 - [x] **4b)** Medir tiempos con `MPI_Wtime()` usando 2, 3 y 4 procesos y calcular el Speedup.
-  - [ ] Capturas de compilación/ejecución MPI y de las mediciones (tomarlas en Linux/WSL).
+  - [x] Capturas de ejecución MPI y de las mediciones (`imagenes/4.2.png` a `4.6.png`).
+  - [ ] Captura 4.1: compilación de la versión MPI.
   ```bash
   mpicc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_mpi.c -o busqueda_clave_aes_mpi -lcrypto
   mpirun -np 4 ./busqueda_clave_aes_mpi [bits=20] [secreta=1000000] [mensaje]
@@ -51,12 +52,12 @@ Laboratorio 03 previo al Proyecto 2 — CC3069 Computación Paralela y Distribui
 
 | Cantidad de procesos (n) | Tiempo (s) | Speedup |
 |---|---|---|
-| 1 (secuencial) | 2.267 | 1.00 |
-| 2 | 0.967 | 2.34 |
-| 3 | 0.775 | 2.93 |
-| 4 | 0.432 | 5.25 |
+| 1 (secuencial) | 2.409 | 1.00 |
+| 2 | 0.924 | 2.61 |
+| 3 | 0.690 | 3.49 |
+| 4 | 0.397 | 6.06 |
 
-*Medido con `24 16000000` (2^24 candidatas), mediana de 3 corridas.*
+*Medido con `24 16000000` (2^24 candidatas), ver `imagenes/4.6.png`.*
 
 ## Orden de trabajo
 

@@ -208,17 +208,29 @@ Clave encontrada: 1000000
 Clave (hex): 000000000000000000000000000f4240
 Mensaje: Puedes lograrlo!
 Coincide con el original: si
-Modo: AES-128-CBC, IV: 8fd12d05ac3982b69b792be36256b9bf
+Modo: AES-128-CBC, IV: 57126c5f63536459baba91c214d61ed4
 Candidatas probadas: 1011857 de 1048576
 Rango explorado: 2^20 de 2^128 claves (2^-108 del espacio)
-Velocidad: 17523680 claves/s
+Velocidad: 20701317 claves/s
 Ejecucion: MPI con 4 procesos (distribucion ciclica)
-Tiempo: 0.057742 segundos
+Tiempo: 0.048879 segundos
 ```
 
 **Verificación.** Se corrieron los mismos cuatro casos de la sección 3 con la versión secuencial y con la paralela (con 1, 2, 3 y 4 procesos). En todos los casos las dos versiones encontraron la misma clave (1 000 000, 777 y 200 000) y el mismo mensaje, con "Coincide con el original: si", y en el caso de la clave fuera del rango las dos recorrieron las 4096 candidatas y reportaron que no la encontraron. El IV cambia entre ejecuciones porque es aleatorio, pero eso no afecta la clave encontrada.
 
-> *Captura 4.1: compilación de la versión MPI. Capturas 4.2 a 4.5: ejecución de los cuatro casos y comparación con la versión secuencial.*
+> *Captura 4.1: compilación de la versión MPI.*
+
+![Captura 4.2: valores por defecto, secuencial y MPI con 4 procesos](imagenes/4.2.png)
+*Captura 4.2: valores por defecto (bits=20, secreta=1000000), versión secuencial y MPI con 4 procesos.*
+
+![Captura 4.3: mensaje corto](imagenes/4.3.png)
+*Captura 4.3: mensaje corto ("Hola", clave 777), versión secuencial y MPI con 3 procesos.*
+
+![Captura 4.4: mensaje de varios bloques](imagenes/4.4.png)
+*Captura 4.4: mensaje de varios bloques (clave 200000), versión secuencial y MPI con 4 procesos.*
+
+![Captura 4.5: clave fuera del rango](imagenes/4.5.png)
+*Captura 4.5: clave fuera del rango (bits=12, secreta=5000), versión secuencial y MPI con 3 procesos.*
 
 ### b) Tiempos y Speedup
 
@@ -231,20 +243,21 @@ mpirun -np 3 ./busqueda_clave_aes_mpi 24 16000000
 mpirun -np 4 ./busqueda_clave_aes_mpi 24 16000000
 ```
 
-Cada configuración se ejecutó 3 veces y se tomó la mediana. El Speedup se calcula como `S(n) = T_secuencial / T_paralelo(n)`.
+El Speedup se calcula como `S(n) = T_secuencial / T_paralelo(n)`.
 
 | Cantidad de procesos (n) | Tiempo (s) | Speedup calculado |
 |---|---|---|
-| 1 (secuencial) | 2.267 | 1.00 |
-| 2 | 0.967 | 2.34 |
-| 3 | 0.775 | 2.93 |
-| 4 | 0.432 | 5.25 |
+| 1 (secuencial) | 2.409 | 1.00 |
+| 2 | 0.924 | 2.61 |
+| 3 | 0.690 | 3.49 |
+| 4 | 0.397 | 6.06 |
 
-*Mediciones en WSL2 (Ubuntu) con 16 hilos lógicos. Como referencia, la versión MPI con 1 proceso tardó 2.123 s, casi lo mismo que la secuencial, lo que muestra que el costo de MPI es pequeño.*
+*Mediciones en WSL2 (Ubuntu) con 16 hilos lógicos (captura 4.6). En pruebas previas en la misma máquina, la versión MPI con 1 proceso tardó casi lo mismo que la secuencial, lo que muestra que el costo de MPI es pequeño.*
 
 El Speedup crece con la cantidad de procesos, como se esperaba, porque la búsqueda es un problema "vergonzosamente paralelo": cada candidata se prueba de forma independiente y la única comunicación es el `MPI_Allreduce` cada 4096 iteraciones. Los valores salen incluso por encima del ideal (`S(n) = n`). Esto no significa que el programa haga menos trabajo, ya que el total de candidatas probadas es prácticamente el mismo; lo más probable es que se deba al hardware: en un procesador con núcleos de distinto tipo (de rendimiento y de eficiencia) y con frecuencia variable (turbo), el sistema operativo puede ubicar al proceso secuencial en un núcleo más lento o bajarle la frecuencia, mientras que con varios procesos alguno cae en los núcleos más rápidos. También influye que WSL2 corre dentro de una máquina virtual. Por eso los números exactos cambian según la máquina, pero la tendencia es clara: repartir la búsqueda entre procesos reduce el tiempo casi en proporción al número de procesos.
 
-> *Captura 4.6: ejecución secuencial y con 2, 3 y 4 procesos usando `24 16000000`.*
+![Captura 4.6: tiempos para el Speedup](imagenes/4.6.png)
+*Captura 4.6: ejecución secuencial y con 2, 3 y 4 procesos usando `24 16000000`.*
 
 ---
 
