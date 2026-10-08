@@ -89,6 +89,8 @@ O sea, el algoritmo AES-128 que se ejecuta es el real (el de OpenSSL), el tamañ
 
 ### Compilación y ejecución
 
+En Linux (Ubuntu/WSL):
+
 ```bash
 sudo apt update
 sudo apt install libssl-dev
@@ -96,18 +98,18 @@ gcc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_secuencial.c -o busqueda_clave
 ./busqueda_clave_aes_secuencial
 ```
 
-Salida obtenida:
+En macOS no existe `apt`, así que OpenSSL se instala con Homebrew (`brew install openssl@3`) y hay que indicarle a `gcc` dónde están sus encabezados y la librería:
 
+```bash
+gcc -std=c11 -O2 -Wall -Wextra -I/opt/homebrew/opt/openssl@3/include busqueda_clave_aes_secuencial.c \
+    -o busqueda_clave_aes_secuencial -L/opt/homebrew/opt/openssl@3/lib -lcrypto
+./busqueda_clave_aes_secuencial
 ```
-Clave encontrada: 12345
-Mensaje: Puedes lograrlo!
-Ejecucion: secuencial
-Tiempo: 0.002940 segundos
-```
 
-> *Captura 2.1: instalación de `libssl-dev`. Captura 2.2: compilación y ejecución del programa original.*
+![Captura 2.1: compilación y ejecución del programa original](imagenes/ejercicio2.png)
+*Captura 2.1: compilación y ejecución del programa secuencial original en macOS.*
 
-El programa compila sin advertencias, incluso con `-Wall -Wextra`. Para el inciso e), el tiempo se mide con `clock_gettime(CLOCK_MONOTONIC)`, un reloj que no se ve afectado si cambia la hora del sistema. La medición empieza después de cifrar el mensaje, así que solo cuenta el tiempo de la búsqueda, y se imprime en pantalla al final. El tiempo es muy pequeño (unos 3 milisegundos) porque la clave secreta es 12345 y el programa se detiene en cuanto la encuentra, de modo que solo prueba 12 346 de las 1 048 576 candidatas. Con un tiempo tan corto no se puede medir bien el Speedup, y por eso en la versión corregida la clave por defecto está cerca del final del rango.
+El programa compila sin advertencias, incluso con `-Wall -Wextra`. Para el inciso e), el tiempo se mide con `clock_gettime(CLOCK_MONOTONIC)`, un reloj que no se ve afectado si cambia la hora del sistema. La medición empieza después de cifrar el mensaje, así que solo cuenta el tiempo de la búsqueda, y se imprime en pantalla al final. El tiempo es muy pequeño (unos 4.5 milisegundos) porque la clave secreta es 12345 y el programa se detiene en cuanto la encuentra, de modo que solo prueba 12 346 de las 1 048 576 candidatas. Con un tiempo tan corto no se puede medir bien el Speedup, y por eso en la versión corregida la clave por defecto está cerca del final del rango.
 
 ---
 
@@ -152,26 +154,22 @@ gcc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_secuencial_mejorado.c -o busqu
 
 ./busqueda_clave_aes_secuencial_mejorado   # valores por defecto: bits=20, secreta=1000000
 ./busqueda_clave_aes_secuencial_mejorado 16 777 "Hola"         # mensaje corto (menos de un bloque)
-./busqueda_clave_aes_secuencial_mejorado 18 200000 "Este mensaje tiene varios bloques de AES-128 en CBC."
+./busqueda_clave_aes_secuencial_mejorado 18 200000 "Estoques de AES-128 en CBC."   # mensaje de varios bloques
 ./busqueda_clave_aes_secuencial_mejorado 12 5000               # clave fuera del rango: se agota sin encontrarla
 ```
 
-Ejemplo de salida con los valores por defecto:
+(En macOS se agregan las mismas opciones `-I` y `-L` de Homebrew que en la sección 2.)
 
-```
-Clave encontrada: 1000000
-Clave (hex): 000000000000000000000000000f4240
-Mensaje: Puedes lograrlo!
-Coincide con el original: si
-Modo: AES-128-CBC, IV: 9f798db34fe2098d7d149affc49f7239
-Candidatas probadas: 1000001 de 1048576
-Rango explorado: 2^20 de 2^128 claves (2^-108 del espacio)
-Velocidad: 19900000 claves/s
-Ejecucion: secuencial
-Tiempo: 0.050182 segundos
-```
+![Captura 3.1: valores por defecto](imagenes/3.1.png)
+*Captura 3.1: programa corregido con los valores por defecto (bits=20, secreta=1000000). Prueba 1 000 001 candidatas y recupera el mensaje original.*
 
-> *Captura 3.1: compilación del programa corregido. Capturas 3.2 a 3.5: ejecución de cada uno de los cuatro casos.* El IV cambia en cada ejecución porque es aleatorio, y el tiempo depende de la máquina.
+![Captura 3.2: mensaje corto](imagenes/3.2.png)
+*Captura 3.2: mensaje corto de menos de un bloque ("Hola", bits=16, clave 777). El relleno PKCS#7 completa el bloque y el mensaje se recupera sin problema.*
+
+![Captura 3.3: mensaje de varios bloques](imagenes/3.3.png)
+*Captura 3.3: mensaje de 27 bytes, que ocupa dos bloques de AES (bits=18, clave 200000). La búsqueda solo compara el primer bloque y después se descifra el mensaje completo.*
+
+El caso de la clave fuera del rango (`12 5000`) se muestra junto con la versión paralela en la captura 4.5. El IV cambia en cada ejecución porque es aleatorio, y el tiempo depende de la máquina.
 
 ---
 
