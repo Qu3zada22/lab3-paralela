@@ -218,7 +218,8 @@ Tiempo: 0.048879 segundos
 
 **Verificación.** Se corrieron los mismos cuatro casos de la sección 3 con la versión secuencial y con la paralela (con 1, 2, 3 y 4 procesos). En todos los casos las dos versiones encontraron la misma clave (1 000 000, 777 y 200 000) y el mismo mensaje, con "Coincide con el original: si", y en el caso de la clave fuera del rango las dos recorrieron las 4096 candidatas y reportaron que no la encontraron. El IV cambia entre ejecuciones porque es aleatorio, pero eso no afecta la clave encontrada.
 
-> *Captura 4.1: compilación de la versión MPI.*
+![Captura 4.1: compilación](imagenes/4.1.png)
+*Captura 4.1: compilación de la versión MPI y de la versión secuencial corregida, sin advertencias con `-Wall -Wextra`.*
 
 ![Captura 4.2: valores por defecto, secuencial y MPI con 4 procesos](imagenes/4.2.png)
 *Captura 4.2: valores por defecto (bits=20, secreta=1000000), versión secuencial y MPI con 4 procesos.*
