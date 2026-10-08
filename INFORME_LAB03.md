@@ -69,6 +69,112 @@ flowchart TD
 
 ---
 
+## 2. Análisis del programa secuencial
+
+El programa `busqueda_clave_aes_secuencial.c` hace una búsqueda por fuerza bruta: primero cifra el mensaje `"Puedes lograrlo!"` con una clave secreta (12345) y después prueba todas las claves candidatas desde 0 hasta 2²⁰ − 1, descifrando el texto cifrado con cada una y comparando el resultado con el mensaje original. Cuando encuentra una que coincide, se detiene e imprime la clave, el mensaje y el tiempo.
+
+### ¿Usa correctamente AES-128?
+
+A nivel de la librería sí lo usa bien. Si lo comparamos con lo investigado en la sección 1:
+
+| Aspecto | Lo investigado | Lo que hace el programa | ¿Correcto? |
+|---|---|---|---|
+| Tamaño de la clave | 128 bits (16 bytes) | `unsigned char key[16]` y `EVP_aes_128_ecb()` | Sí |
+| Tamaño del bloque | 128 bits (16 bytes) | `MESSAGE_LEN = 16` y un `_Static_assert` que obliga a que el mensaje mida 16 bytes | Sí |
+| Cifrado y descifrado | misma clave, el descifrado es la operación inversa | la misma función `crypt_block` con `encrypt = 1` para cifrar y `encrypt = 0` para descifrar, usando la misma clave | Sí |
+| Relleno (padding) | necesario si el texto no es múltiplo de 16 | `EVP_CIPHER_CTX_set_padding(ctx, 0)`, válido porque el mensaje mide exactamente un bloque | Sí, pero solo para este mensaje |
+| Rondas y transformaciones | 10 rondas, SubBytes, ShiftRows, MixColumns, AddRoundKey | las hace OpenSSL internamente a través de la interfaz EVP | Sí |
+
+O sea, el algoritmo AES-128 que se ejecuta es el real (el de OpenSSL), el tamaño de clave y de bloque son correctos y el descifrado es el inverso del cifrado. Lo que no es correcto es la forma en que se usa: la clave no tiene 128 bits de aleatoriedad, el modo ECB no es seguro y el programa solo funciona con mensajes de exactamente 16 bytes. Esos problemas se explican en la sección 3.
+
+### Compilación y ejecución
+
+```bash
+sudo apt update
+sudo apt install libssl-dev
+gcc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_secuencial.c -o busqueda_clave_aes_secuencial -lcrypto
+./busqueda_clave_aes_secuencial
+```
+
+Salida obtenida:
+
+```
+Clave encontrada: 12345
+Mensaje: Puedes lograrlo!
+Ejecucion: secuencial
+Tiempo: 0.002940 segundos
+```
+
+> *Captura 2.1: instalación de `libssl-dev`. Captura 2.2: compilación y ejecución del programa original.*
+
+El programa compila sin advertencias, incluso con `-Wall -Wextra`. Para el inciso e), el tiempo se mide con `clock_gettime(CLOCK_MONOTONIC)`, un reloj que no se ve afectado si cambia la hora del sistema. La medición empieza después de cifrar el mensaje, así que solo cuenta el tiempo de la búsqueda, y se imprime en pantalla al final. El tiempo es muy pequeño (unos 3 milisegundos) porque la clave secreta es 12345 y el programa se detiene en cuanto la encuentra, de modo que solo prueba 12 346 de las 1 048 576 candidatas. Con un tiempo tan corto no se puede medir bien el Speedup, y por eso en la versión corregida la clave por defecto está cerca del final del rango.
+
+---
+
+## 3. Errores conceptuales y limitaciones
+
+### a) Análisis
+
+**Construcción de la clave.** La función `make_key` llena los 16 bytes de la clave con ceros y solo copia el número candidato en los últimos 8 bytes. Por ejemplo, la clave 12345 queda como `00000000000000000000000000003039`. Aunque la clave mide 128 bits, en la práctica solo varían 64 bits y, como la búsqueda llega hasta 2²⁰, el secreto real tiene apenas 20 bits. Una clave AES de verdad tiene que ser aleatoria en sus 128 bits (generada con algo como `RAND_bytes`) o derivarse de una contraseña con un KDF como PBKDF2 o Argon2. Con esta construcción, cualquiera que sepa cómo se arma la clave sabe que basta con probar números pequeños.
+
+**El modo ECB.** ECB cifra cada bloque por separado y no usa IV (vector de inicialización). Eso hace que dos bloques iguales de texto plano siempre den el mismo bloque cifrado, así que el texto cifrado deja ver los patrones del original (el ejemplo clásico es la imagen del pingüino cifrada con ECB, donde todavía se ve la figura). Además, cifrar dos veces el mismo mensaje con la misma clave da exactamente el mismo resultado, y un atacante puede saber si se repitió un mensaje. Como aquí hay un solo bloque los patrones no se notan, pero ECB no debería usarse para datos reales. ECB tampoco autentica: si alguien modifica el texto cifrado, el programa no se entera.
+
+**El uso del texto original para verificar las candidatas.** Para decidir si una clave es correcta, el programa compara el texto descifrado con `message`, es decir, con el mensaje original completo. En un ataque real eso no tiene sentido: si el atacante ya tuviera el mensaje, no necesitaría descifrarlo. En la práctica solo se conoce una parte (la cabecera de un archivo, un prefijo fijo de un protocolo, un formato esperado) o se usa un MAC o checksum para confirmar la clave. Aquí la comparación funciona como un "oráculo" que solo existe en el laboratorio. También hace que el programa dependa de un mensaje de exactamente 16 bytes.
+
+**El espacio completo de AES-128 contra el rango explorado.** AES-128 tiene 2¹²⁸ ≈ 3.4 × 10³⁸ claves posibles, y el programa solo explora 2²⁰ = 1 048 576, es decir, 2⁻¹⁰⁸ del espacio total (alrededor de 3 × 10⁻³¹ %). La búsqueda termina en milisegundos solo porque la clave secreta está dentro de ese rango tan pequeño. Para tener una idea: a unos 10⁷ claves por segundo, que es más o menos lo que alcanza esta implementación en una laptop, recorrer las 2¹²⁸ claves tomaría del orden de 10²⁴ años. Aunque se paralelice con miles de procesos, la fuerza bruta contra AES-128 con una clave bien generada no es viable. El programa demuestra la técnica, pero no demuestra que AES se pueda romper.
+
+**Otras limitaciones.**
+- `TOTAL_KEYS`, `SECRET_KEY` y el mensaje están fijos en el código, así que para probar otro caso hay que recompilar.
+- En cada candidata se llama a `EVP_CipherInit_ex` con el algoritmo completo y se vuelve a configurar el relleno, aunque eso nunca cambia; ese trabajo se repite más de un millón de veces.
+- Solo se imprime el número de la clave y no los 16 bytes reales.
+- El encabezado del archivo dice CC3169 en lugar de CC3069.
+
+### b) Mejoras propuestas e implementadas
+
+Las mejoras están en un archivo aparte, `busqueda_clave_aes_secuencial_mejorado.c`, para conservar el original del ejercicio 2 y poder comparar ambos. Esta versión corregida es la base de la versión paralela del ejercicio 4.
+
+| # | Mejora | Tipo | Justificación | Propuesta por |
+|---|---|---|---|---|
+| M1 | Usar **AES-128-CBC con IV aleatorio** (`RAND_bytes`) en lugar de ECB | Seguridad | En CBC cada bloque se combina con el bloque cifrado anterior, y el primero con el IV. Con un IV aleatorio el mismo mensaje cifrado dos veces da resultados distintos y ya no se filtran patrones. El IV no es secreto; viaja junto con el texto cifrado. | ____________ |
+| M2 | Recibir el **rango (`bits`), la clave secreta y el mensaje por línea de comandos**, con validación de los argumentos (`strtoull` con control de errores, `bits` entre 1 y 40, mensaje de 1 a 1024 bytes). Se aceptan mensajes de **cualquier largo** usando el relleno PKCS#7. | Flexibilidad | Permite cambiar el tamaño del problema y probar distintos casos sin recompilar, incluido el caso en que la clave no está en el rango. Además, el programa deja de estar limitado a mensajes de exactamente 16 bytes. | ____________ |
+| M3 | Configurar el **contexto EVP una sola vez** (algoritmo y relleno) y en cada candidata cargar solo la clave con `EVP_CipherInit_ex(ctx, NULL, NULL, key, iv, -1)` | Rendimiento | Evita repetir más de un millón de veces la selección del algoritmo y la configuración del relleno, que nunca cambian. | ____________ |
+| M4 | **Verificar con un fragmento conocido**: la búsqueda descifra y compara solo el primer bloque (16 bytes), y el mensaje completo se descifra una sola vez, con la clave encontrada | Rendimiento / realismo | Imita un ataque de texto conocido, donde el atacante solo conoce una parte (por ejemplo una cabecera). Además, cada candidata cuesta lo mismo aunque el mensaje sea largo, porque siempre se descifra un único bloque. La probabilidad de que una clave incorrecta coincida en los 16 bytes es de aproximadamente 2⁻¹²⁸. | ____________ |
+| M5 | **Reporte más completo**: la clave en hexadecimal (16 bytes), el IV, las candidatas probadas, la velocidad en claves/s, la fracción del espacio de AES-128 explorada y si el mensaje recuperado coincide con el original | Claridad | Hace visible la limitación del rango (2²⁰ de 2¹²⁸) y da datos útiles para comparar la versión secuencial con la paralela. | ____________ |
+
+Además, la clave secreta por defecto pasó de 12345 a 1 000 000. Así la búsqueda recorre casi todo el rango (1 000 001 de 1 048 576 candidatas) y dura lo suficiente para medir el Speedup en el ejercicio 4.
+
+La construcción de la clave (`ceros || contador`) **se dejó igual a propósito**, porque el ejercicio necesita un espacio de claves que se pueda enumerar. En un sistema real la clave saldría de `RAND_bytes` o de un KDF, y convendría usar un modo autenticado como AES-GCM, que además de cifrar detecta si el mensaje fue modificado.
+
+### Compilación y ejecución del programa corregido
+
+```bash
+gcc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_secuencial_mejorado.c -o busqueda_clave_aes_secuencial_mejorado -lcrypto
+
+./busqueda_clave_aes_secuencial_mejorado   # valores por defecto: bits=20, secreta=1000000
+./busqueda_clave_aes_secuencial_mejorado 16 777 "Hola"         # mensaje corto (menos de un bloque)
+./busqueda_clave_aes_secuencial_mejorado 18 200000 "Este mensaje tiene varios bloques de AES-128 en CBC."
+./busqueda_clave_aes_secuencial_mejorado 12 5000               # clave fuera del rango: se agota sin encontrarla
+```
+
+Ejemplo de salida con los valores por defecto:
+
+```
+Clave encontrada: 1000000
+Clave (hex): 000000000000000000000000000f4240
+Mensaje: Puedes lograrlo!
+Coincide con el original: si
+Modo: AES-128-CBC, IV: 9f798db34fe2098d7d149affc49f7239
+Candidatas probadas: 1000001 de 1048576
+Rango explorado: 2^20 de 2^128 claves (2^-108 del espacio)
+Velocidad: 19900000 claves/s
+Ejecucion: secuencial
+Tiempo: 0.050182 segundos
+```
+
+> *Captura 3.1: compilación del programa corregido. Capturas 3.2 a 3.5: ejecución de cada uno de los cuatro casos.* El IV cambia en cada ejecución porque es aleatorio, y el tiempo depende de la máquina.
+
+---
+
 ## Referencias
 
 National Institute of Standards and Technology (2001, actualizado 2023). _FIPS 197: Advanced Encryption Standard (AES)_. https://doi.org/10.6028/NIST.FIPS.197-upd1
