@@ -24,9 +24,17 @@ Laboratorio 03 previo al Proyecto 2 — CC3069 Computación Paralela y Distribui
   gcc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_secuencial.c -o busqueda_clave_aes_secuencial -lcrypto
   ./busqueda_clave_aes_secuencial
   ```
-- [ ] **Ej. 3a:** Identificar errores conceptuales y limitaciones: construcción de la clave, modo ECB, uso del texto original para verificar candidatas, espacio completo de AES-128 vs. rango explorado.
-- [ ] **Ej. 3b:** Proponer, implementar y justificar mejoras (seguridad, flexibilidad o rendimiento), con el nombre de quien propuso cada una.
-- [ ] **Entrega:** programa secuencial corregido (base para la Persona 3).
+  - [x] Análisis y respuestas en `INFORME_LAB03.md` (sección 2).
+  - [ ] Capturas de instalación, compilación y ejecución (tomarlas en Linux/WSL).
+- [x] **Ej. 3a:** Identificar errores conceptuales y limitaciones: construcción de la clave, modo ECB, uso del texto original para verificar candidatas, espacio completo de AES-128 vs. rango explorado.
+- [x] **Ej. 3b:** Proponer, implementar y justificar mejoras (seguridad, flexibilidad o rendimiento), con el nombre de quien propuso cada una.
+  - [ ] Llenar la columna "Propuesta por" en la tabla de mejoras del informe.
+  - [ ] Capturas del programa corregido (4 casos de la sección 3 del informe).
+- [x] **Entrega:** programa secuencial corregido (`busqueda_clave_aes_secuencial_mejorado.c`), base para la Persona 3.
+  ```bash
+  gcc -std=c11 -O2 -Wall -Wextra busqueda_clave_aes_secuencial_mejorado.c -o busqueda_clave_aes_secuencial_mejorado -lcrypto
+  ./busqueda_clave_aes_secuencial_mejorado [bits=20] [secreta=1000000] [mensaje]
+  ```
 
 ### 👤 Persona 3 — Ejercicio 4 (Versión paralela con Open MPI)
 
@@ -52,5 +60,5 @@ Laboratorio 03 previo al Proyecto 2 — CC3069 Computación Paralela y Distribui
 ## Entregables
 
 - PDF con respuestas, diagrama y capturas de compilación/ejecución.
-- `busqueda_clave_aes_secuencial.c` (corregido y mejorado).
+- `busqueda_clave_aes_secuencial.c` (original) y `busqueda_clave_aes_secuencial_mejorado.c` (corregido y mejorado).
 - Versión paralela con Open MPI.
